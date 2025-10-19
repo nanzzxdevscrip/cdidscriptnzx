@@ -1,95 +1,79 @@
---// Steel a Brainrot - Auto Lock Base Script by nanzzxdev
---// Fungsi: Teleport ke base kamu & cegah server teleport ke base orang lain
+-- AUTO FLY BY CHATGPT (Speed 50, Full Kebal, GUI Switch Kiri Atas)
 
 local player = game.Players.LocalPlayer
-local gui = Instance.new("ScreenGui", game.CoreGui)
-local frame = Instance.new("Frame", gui)
-local startButton = Instance.new("TextButton", frame)
-local stopButton = Instance.new("TextButton", frame)
-local baseCFrame = nil
-local stayAtBase = false
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
 
--- UI Styling
-gui.ResetOnSpawn = false
-frame.Size = UDim2.new(0, 180, 0, 100)
-frame.Position = UDim2.new(0.5, -90, 0.5, -50)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-frame.BorderSizePixel = 2
-frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-frame.Active = true
-frame.Draggable = true
+local flying = false
+local flySpeed = 50
+local bodyGyro, bodyVel
 
-startButton.Size = UDim2.new(1, -20, 0, 40)
-startButton.Position = UDim2.new(0, 10, 0, 10)
-startButton.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
-startButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-startButton.Text = "🚀 START"
-startButton.Font = Enum.Font.GothamBold
-startButton.TextSize = 18
-startButton.BorderSizePixel = 0
-
-stopButton.Size = UDim2.new(1, -20, 0, 30)
-stopButton.Position = UDim2.new(0, 10, 0, 60)
-stopButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
-stopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-stopButton.Text = "🛑 STOP"
-stopButton.Font = Enum.Font.GothamBold
-stopButton.TextSize = 16
-stopButton.BorderSizePixel = 0
-
--- Get base (lokasi awal pemain)
-local function setBase()
-	repeat task.wait() until player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-	baseCFrame = player.Character.HumanoidRootPart.CFrame
+-- Anti Damage Full Kebal (Disable Humanoid Damage)
+local function setGodMode(state)
+    local hum = character:FindFirstChild("Humanoid")
+    if hum then
+        if state then
+            hum.MaxHealth = math.huge
+            hum.Health = math.huge
+        else
+            hum.MaxHealth = 100
+            hum.Health = 100
+        end
+    end
 end
 
--- Fungsi start teleport & lock
-local function startLock()
-	if not baseCFrame then
-		setBase()
-	end
-	local char = player.Character
-	if char and char:FindFirstChild("HumanoidRootPart") then
-		char.HumanoidRootPart.CFrame = baseCFrame + Vector3.new(0, 3, 0)
-	end
-	stayAtBase = true
-	game.StarterGui:SetCore("SendNotification", {
-		Title = "Steel a Brainrot";
-		Text = "🔒 Base lock aktif!";
-		Duration = 3;
-	})
+-- Mulai Fly
+local function startFly()
+    if flying then return end
+    flying = true
+    bodyGyro = Instance.new("BodyGyro", hrp)
+    bodyVel = Instance.new("BodyVelocity", hrp)
 
-	task.spawn(function()
-		while stayAtBase do
-			task.wait(1)
-			local c = player.Character
-			if c and c:FindFirstChild("HumanoidRootPart") and baseCFrame then
-				local dist = (c.HumanoidRootPart.Position - baseCFrame.Position).Magnitude
-				if dist > 20 then
-					c.HumanoidRootPart.CFrame = baseCFrame + Vector3.new(0, 3, 0)
-				end
-			end
-		end
-	end)
+    bodyGyro.P = 9e4
+    bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bodyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
+    setGodMode(true)
+
+    spawn(function()
+        while flying do
+            bodyGyro.CFrame = workspace.CurrentCamera.CFrame
+            bodyVel.Velocity = workspace.CurrentCamera.CFrame.LookVector * flySpeed
+            task.wait()
+        end
+    end)
 end
 
--- Fungsi stop
-local function stopLock()
-	stayAtBase = false
-	game.StarterGui:SetCore("SendNotification", {
-		Title = "Steel a Brainrot";
-		Text = "❌ Base lock dimatikan.";
-		Duration = 3;
-	})
+-- Berhenti Fly
+local function stopFly()
+    flying = false
+    setGodMode(false)
+    if bodyGyro then bodyGyro:Destroy() end
+    if bodyVel then bodyVel:Destroy() end
 end
 
--- Tombol
-startButton.MouseButton1Click:Connect(startLock)
-stopButton.MouseButton1Click:Connect(stopLock)
+-- GUI Switch (Kiri Atas)
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+local Button = Instance.new("TextButton", ScreenGui)
 
--- Notif awal
-game.StarterGui:SetCore("SendNotification", {
-	Title = "Steel a Brainrot Script";
-	Text = "UI aktif ✅ Klik START untuk teleport & kunci posisi.";
-	Duration = 5;
-})
+Button.Size = UDim2.new(0, 120, 0, 40)
+Button.Position = UDim2.new(0, 10, 0, 10) -- Kiri Atas
+Button.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.Font = Enum.Font.SourceSansBold
+Button.TextSize = 18
+Button.Text = "Fly: OFF"
+
+Button.MouseButton1Click:Connect(function()
+    if flying then
+        stopFly()
+        Button.Text = "Fly: OFF"
+        Button.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    else
+        startFly()
+        Button.Text = "Fly: ON"
+        Button.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+    end
+end)
+
+print("✅ Auto Fly Loaded! Tekan Tombol di Kiri Atas")
