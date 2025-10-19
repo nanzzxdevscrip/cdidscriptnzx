@@ -1,160 +1,148 @@
 --[[
-NZX CDID Truck Autofarm
-Hanya aktif di wilayah Jawa Tengah
-Buat Delta Executor | Versi 1.0
+NZX AUTO TRUCK FARM CDID
+Hanya aktif di wilayah Jawa Tengah (Java Sedara)
+Executor: Delta / Fluxus / ArceusX / Codex / Hydrogen
+By: nanzzxdev
 ]]
 
--- 🧩 CONFIGURASI UTAMA
-local JOB_TELEPORT_POS = Vector3.new(1020, 15, -450)
-local WAYPOINTS = {
-    Vector3.new(1500, 20, -500),
-    Vector3.new(1800, 25, -800),
-    Vector3.new(2100, 25, -1000),
-}
-local REGION_BOUNDS = {minX = -5000, maxX = 5000, minZ = -7000, maxZ = 3000}
-local VALID_TRUCKS = {"TrukBox", "TrukKayu"}
-local COOLDOWN_TIME = 5
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
 
--- 🧠 VARIABEL SISTEM
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local LocalPlayer = Players.LocalPlayer
-local active = false
-local gui = nil
+-- GUI START/STOP
+local ScreenGui = Instance.new("ScreenGui")
+local Frame = Instance.new("Frame")
+local StartBtn = Instance.new("TextButton")
+local StopBtn = Instance.new("TextButton")
+local UICorner = Instance.new("UICorner")
 
--- 🪟 GUI NZX
-function createGUI()
-    if gui then gui:Destroy() end
+ScreenGui.Parent = game.CoreGui
+Frame.Parent = ScreenGui
+Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Frame.Size = UDim2.new(0,150,0,100)
+Frame.Position = UDim2.new(0.5,-75,0.8,-50)
+Frame.Active = true
+Frame.Draggable = true
+UICorner.Parent = Frame
 
-    gui = Instance.new("ScreenGui")
-    gui.Name = "NZXTruckAutofarm"
-    gui.ResetOnSpawn = false
-    gui.Parent = game.CoreGui
+StartBtn.Parent = Frame
+StartBtn.BackgroundColor3 = Color3.fromRGB(0,255,100)
+StartBtn.Size = UDim2.new(1,0,0.5,0)
+StartBtn.Text = "🚚 START"
+UICorner:Clone().Parent = StartBtn
 
-    local main = Instance.new("Frame")
-    main.Size = UDim2.new(0, 200, 0, 120)
-    main.Position = UDim2.new(0.05, 0, 0.3, 0)
-    main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    main.BorderSizePixel = 0
-    main.Active = true
-    main.Draggable = true
-    main.Parent = gui
+StopBtn.Parent = Frame
+StopBtn.BackgroundColor3 = Color3.fromRGB(255,50,50)
+StopBtn.Position = UDim2.new(0,0,0.5,0)
+StopBtn.Size = UDim2.new(1,0,0.5,0)
+StopBtn.Text = "🛑 STOP"
+UICorner:Clone().Parent = StopBtn
 
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.BackgroundTransparency = 1
-    title.Text = "🚛 CDID Truck Autofarm by NZX"
-    title.TextColor3 = Color3.fromRGB(0, 255, 127)
-    title.Font = Enum.Font.SourceSansBold
-    title.TextSize = 14
-    title.Parent = main
+local running = false
 
-    local button = Instance.new("TextButton")
-    button.Size = UDim2.new(0.8, 0, 0, 40)
-    button.Position = UDim2.new(0.1, 0, 0.5, 0)
-    button.BackgroundColor3 = Color3.fromRGB(0, 255, 127)
-    button.Text = "Start"
-    button.TextColor3 = Color3.new(0, 0, 0)
-    button.Font = Enum.Font.SourceSansBold
-    button.TextSize = 18
-    button.Parent = main
+-- CEK WILAYAH
+function isInRegion()
+    local plr = game.Players.LocalPlayer
+    local gui = plr:FindFirstChild("PlayerGui")
+    if not gui then return false end
 
-    button.MouseButton1Click:Connect(function()
-        active = not active
-        button.Text = active and "Stop" or "Start"
-        button.BackgroundColor3 = active and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(0, 255, 127)
-        if active then
-            startAutofarm()
+    local areaLabel = gui:FindFirstChild("AreaLabel", true)
+    if areaLabel and areaLabel:IsA("TextLabel") then
+        local text = string.lower(areaLabel.Text)
+        if string.find(text, "java sedara") or string.find(text, "jawa tengah") then
+            return true
         end
-    end)
+    end
+    return false
 end
 
--- 🌍 CEK WILAYAH JAWA TENGAH
-function isInRegion(pos)
-    return pos.X >= REGION_BOUNDS.minX and pos.X <= REGION_BOUNDS.maxX
-       and pos.Z >= REGION_BOUNDS.minZ and pos.Z <= REGION_BOUNDS.maxZ
+-- COORDINATE JOB TRUK DAN TUJUAN
+local JOB_TELEPORT_POS = Vector3.new(-1292, 40, 2184) -- titik job truk (contoh)
+local WAYPOINTS = {
+    Vector3.new(-2300, 45, 3100),
+    Vector3.new(-1400, 50, 2500),
+    Vector3.new(-1900, 45, 3500),
+}
+
+-- FUNGSI TELEPORT
+function tp(pos)
+    local char = game.Players.LocalPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char:MoveTo(pos)
+    end
 end
 
--- 🚛 CARI TRUK VALID
+-- CARI TRUK BOX/KAYU
 function findTruck()
-    for _, v in pairs(workspace:GetChildren()) do
-        if v:IsA("Model") then
-            for _, validName in ipairs(VALID_TRUCKS) do
-                if string.find(string.lower(v.Name), string.lower(validName)) then
-                    return v
+    for _,v in pairs(workspace.Vehicles:GetChildren()) do
+        if v.Name:lower():find("truck") and (v.Name:lower():find("box") or v.Name:lower():find("kayu")) then
+            return v
+        end
+    end
+end
+
+-- AUTOFARM LOOP
+function startFarm()
+    if not isInRegion() then
+        game.StarterGui:SetCore("SendNotification", {
+            Title = "❌ Gagal Mulai",
+            Text = "Script hanya dapat digunakan di wilayah Jawa Tengah (Java Sedara)!",
+            Duration = 6
+        })
+        return
+    end
+
+    running = true
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "🚚 NZX Autofarm",
+        Text = "Mulai Farming Otomatis di Jawa Tengah!",
+        Duration = 5
+    })
+
+    task.spawn(function()
+        while running do
+            tp(JOB_TELEPORT_POS)
+            task.wait(3)
+
+            local truck = findTruck()
+            if not truck then
+                task.wait(2)
+            else
+                local hrp = game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    hrp.CFrame = truck.PrimaryPart.CFrame + Vector3.new(0,3,0)
+                end
+
+                for _,loc in ipairs(WAYPOINTS) do
+                    if not running then break end
+                    for i=1,50 do
+                        if truck and truck.PrimaryPart then
+                            truck:SetPrimaryPartCFrame(CFrame.new(loc + Vector3.new(0,50,0)))
+                        end
+                        task.wait(0.1)
+                    end
+                    task.wait(5) -- cooldown antar lokasi
                 end
             end
         end
-    end
-    return nil
-end
-
--- 🛞 MASUK TRUK
-function seatInTruck(truck)
-    local seat = truck:FindFirstChildWhichIsA("VehicleSeat", true)
-    if seat and LocalPlayer.Character then
-        LocalPlayer.Character:MoveTo(seat.Position + Vector3.new(0, 3, 0))
-        task.wait(1)
-        seat:Sit(LocalPlayer.Character:FindFirstChildOfClass("Humanoid"))
-    end
-end
-
--- ✈️ FLY KE TUJUAN
-function flyTo(pos)
-    local char = LocalPlayer.Character
-    if not char or not char.PrimaryPart then return end
-    local tween = TweenService:Create(char.PrimaryPart, TweenInfo.new(5), {CFrame = CFrame.new(pos)})
-    tween:Play()
-    tween.Completed:Wait()
-end
-
--- 🚀 PROSES UTAMA AUTOFARM
-function startAutofarm()
-    task.spawn(function()
-        local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-        if not isInRegion(char.PrimaryPart.Position) then
-            game.StarterGui:SetCore("SendNotification", {
-                Title = "NZX Autofarm",
-                Text = "Hanya tersedia di wilayah Jawa Tengah!",
-                Duration = 4
-            })
-            active = false
-            return
-        end
-
-        -- Teleport ke job
-        char:SetPrimaryPartCFrame(CFrame.new(JOB_TELEPORT_POS))
-        task.wait(2)
-
-        -- Cari truk
-        local truck = nil
-        repeat
-            truck = findTruck()
-            task.wait(2)
-        until truck or not active
-
-        if not truck then return end
-
-        seatInTruck(truck)
-        task.wait(2)
-
-        -- Jalankan rute
-        for _, waypoint in ipairs(WAYPOINTS) do
-            if not active then break end
-            flyTo(waypoint)
-            task.wait(COOLDOWN_TIME)
-        end
-
-        game.StarterGui:SetCore("SendNotification", {
-            Title = "NZX Autofarm",
-            Text = "Rute selesai!",
-            Duration = 5
-        })
-
-        active = false
     end)
 end
 
--- Jalankan GUI
-createGUI()
+-- STOP FARM
+function stopFarm()
+    running = false
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "🛑 NZX Autofarm",
+        Text = "Autofarm telah dihentikan!",
+        Duration = 5
+    })
+end
+
+StartBtn.MouseButton1Click:Connect(startFarm)
+StopBtn.MouseButton1Click:Connect(stopFarm)
+
+game.StarterGui:SetCore("SendNotification", {
+    Title = "✅ NZX CDID Autofarm",
+    Text = "Script siap digunakan! Klik START untuk mulai.",
+    Duration = 7
+})
